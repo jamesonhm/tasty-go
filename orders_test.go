@@ -855,6 +855,93 @@ func TestPatchOrderError(t *testing.T) {
 	require.NotNil(t, httpResp)
 }
 
+func TestSubmitMarketComplexOrderDryRun(t *testing.T) {
+	setup()
+	defer teardown()
+
+	accountNumber := "5YZ55555"
+	symbol := "AAPL"
+	quantity := float32(1)
+	action := BTO
+
+	mux.HandleFunc(fmt.Sprintf("/accounts/%s/complex-orders/dry-run", accountNumber), func(writer http.ResponseWriter, request *http.Request) {
+		fmt.Fprint(writer, orderDryRunResp)
+	})
+
+	order := NewOrder{
+		TimeInForce: Day,
+		OrderType:   Market,
+		Legs: []NewOrderLeg{
+			{
+				InstrumentType: EquityIT,
+				Symbol:         symbol,
+				Quantity:       quantity,
+				Action:         action,
+			},
+		},
+	}
+
+	resp, orderErr, httpResp, err := client.SubmitOrderDryRun(accountNumber, order)
+	require.Nil(t, err)
+	require.NotNil(t, httpResp)
+	require.Nil(t, orderErr)
+
+	o := resp.Order
+
+	require.Equal(t, accountNumber, o.AccountNumber)
+	require.Equal(t, Day, o.TimeInForce)
+	require.Equal(t, Market, o.OrderType)
+	require.Equal(t, 1, o.Size)
+	require.Equal(t, symbol, o.UnderlyingSymbol)
+	require.Equal(t, EquityIT, o.UnderlyingInstrumentType)
+	require.Equal(t, Contingent, o.Status)
+	require.Equal(t, "Pending Condition", o.ContingentStatus)
+	require.True(t, o.Cancellable)
+	require.True(t, o.Editable)
+	require.False(t, o.Edited)
+	require.Zero(t, o.UpdatedAt, "hello")
+
+	ol := o.Legs[0]
+
+	require.Equal(t, EquityIT, ol.InstrumentType)
+	require.Equal(t, symbol, ol.Symbol)
+	require.Equal(t, quantity, ol.Quantity)
+	require.Equal(t, quantity, ol.RemainingQuantity)
+	require.Equal(t, action, ol.Action)
+	require.Empty(t, ol.Fills)
+
+	require.Empty(t, resp.Warnings)
+
+	bpe := resp.BuyingPowerEffect
+
+	require.Equal(t, decimal.NewFromFloat(183.08), bpe.ChangeInMarginRequirement)
+	require.Equal(t, Debit, bpe.ChangeInMarginRequirementEffect)
+	require.Equal(t, decimal.NewFromFloat(183.081), bpe.ChangeInBuyingPower)
+	require.Equal(t, Debit, bpe.ChangeInBuyingPowerEffect)
+	require.Equal(t, decimal.NewFromFloat(241.62), bpe.CurrentBuyingPower)
+	require.Equal(t, Credit, bpe.CurrentBuyingPowerEffect)
+	require.Equal(t, decimal.NewFromFloat(58.539), bpe.NewBuyingPower)
+	require.Equal(t, Credit, bpe.NewBuyingPowerEffect)
+	require.Equal(t, decimal.NewFromFloat(183.08), bpe.IsolatedOrderMarginRequirement)
+	require.Equal(t, Debit, bpe.IsolatedOrderMarginRequirementEffect)
+	require.False(t, bpe.IsSpread)
+	require.Equal(t, decimal.NewFromFloat(183.081), bpe.Impact)
+	require.Equal(t, Debit, bpe.Effect)
+
+	fee := resp.FeeCalculation
+
+	require.True(t, fee.RegulatoryFees.Equal(decimal.Zero), "regulatory fees")
+	require.Equal(t, None, fee.RegulatoryFeesEffect)
+	require.Equal(t, decimal.NewFromFloat(0.001), fee.ClearingFees)
+	require.Equal(t, Debit, fee.ClearingFeesEffect)
+	require.True(t, fee.Commission.Equal(decimal.Zero))
+	require.Equal(t, None, fee.CommissionEffect)
+	require.True(t, fee.ProprietaryIndexOptionFees.Equal(decimal.Zero))
+	require.Equal(t, None, fee.ProprietaryIndexOptionFeesEffect)
+	require.Equal(t, decimal.NewFromFloat(0.001), fee.TotalFees)
+	require.Equal(t, Debit, fee.TotalFeesEffect)
+}
+
 func TestGetCustomerLiveOrders(t *testing.T) {
 	setup()
 	defer teardown()
@@ -1784,4 +1871,134 @@ const customerLiveOrdersResp = `{
     ]
   },
   "context": "/customers/me/orders/live"
+}`
+
+const accountComplexOrdersResp = `{
+  "data": {
+    "items": [
+	  {
+		"terminal-at": "",
+		"orders": [
+		  {
+			"id": 68681,
+			"account-number": "5WV48989",
+			"time-in-force": "Day",
+			"order-type": "Limit",
+			"size": 1,
+			"underlying-symbol": "AAPL",
+			"underlying-instrument-type": "Equity",
+			"price": "187.45",
+			"price-effect": "Debit",
+			"value-effect": "Debit",
+			"status": "Contingent",
+			"contingent-status": "Pending Condition",
+			"cancellable": true,
+			"editable": true,
+			"edited": false,
+			"received-at": "2023-06-14T01:46:44.803+00:00",
+			"updated-at": 1686707204835,
+			"legs": [
+			  {
+				"instrument-type": "Equity",
+				"symbol": "AAPL",
+				"quantity": 1,
+				"remaining-quantity": 1,
+				"action": "Buy to Open",
+				"fills": []
+			  }
+			],
+			"rules": {
+			  "conditions": [
+				{
+				  "id": 287,
+				  "action": "route",
+				  "symbol": "AAPL",
+				  "instrument-type": "Equity",
+				  "indicator": "last",
+				  "comparator": "lte",
+				  "threshold": "0.01",
+				  "is-threshold-based-on-notional": false,
+				  "price-components": [
+					{
+					  "symbol": "AAPL",
+					  "instrument-type": "Equity",
+					  "quantity": 1,
+					  "quantity-direction": "Long"
+					}
+				  ]
+				}
+			  ]
+			}
+		  },
+		  {
+			"id": 68680,
+			"account-number": "5WV48989",
+			"time-in-force": "Day",
+			"order-type": "Limit",
+			"size": 1,
+			"underlying-symbol": "AAPL",
+			"underlying-instrument-type": "Equity",
+			"price": "185.45",
+			"price-effect": "Debit",
+			"value-effect": "Debit",
+			"status": "Cancelled",
+			"cancellable": false,
+			"cancelled-at": "2023-06-14T01:46:44.799+00:00",
+			"editable": false,
+			"edited": true,
+			"received-at": "2023-06-14T01:38:59.936+00:00",
+			"updated-at": 1686707204813,
+			"terminal-at": "2023-06-14T01:46:44.799+00:00",
+			"legs": [
+			  {
+				"instrument-type": "Equity",
+				"symbol": "AAPL",
+				"quantity": 1,
+				"remaining-quantity": 1,
+				"action": "Buy to Open",
+				"fills": []
+			  }
+			],
+			"rules": {
+			  "conditions": [
+				{
+				  "id": 286,
+				  "action": "route",
+				  "symbol": "AAPL",
+				  "instrument-type": "Equity",
+				  "indicator": "last",
+				  "comparator": "lte",
+				  "threshold": "0.01",
+				  "is-threshold-based-on-notional": false,
+				  "price-components": [
+					{
+					  "symbol": "AAPL",
+					  "instrument-type": "Equity",
+					  "quantity": 1,
+					  "quantity-direction": "Long"
+					}
+				  ]
+				}
+			  ]
+			}
+		  }
+		],
+		"ratio-price-threshold": 0,
+		"related-orders": [
+			{
+				"id": "123",
+    ]
+  },
+  "context": "/accounts/5WV48989/orders",
+  "pagination": {
+    "per-page": 2,
+    "page-offset": 0,
+    "item-offset": 0,
+    "total-items": 8,
+    "total-pages": 4,
+    "current-item-count": 2,
+    "previous-link": null,
+    "next-link": null,
+    "paging-link-template": null
+  }
 }`

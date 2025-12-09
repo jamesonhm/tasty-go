@@ -7,62 +7,67 @@ import (
 )
 
 type Order struct {
-	ID                       int             `json:"id"`
 	AccountNumber            string          `json:"account-number"`
-	TimeInForce              TimeInForce     `json:"time-in-force"`
-	GtcDate                  string          `json:"gtc-date"`
-	OrderType                OrderType       `json:"order-type"`
-	Size                     int             `json:"size"`
-	UnderlyingSymbol         string          `json:"underlying-symbol"`
-	UnderlyingInstrumentType InstrumentType  `json:"underlying-instrument-type"`
-	Price                    decimal.Decimal `json:"price"`
-	PriceEffect              PriceEffect     `json:"price-effect"`
-	Value                    decimal.Decimal `json:"value"`
-	ValueEffect              PriceEffect     `json:"value-effect"`
-	StopTrigger              decimal.Decimal `json:"stop-trigger"`
-	Status                   OrderStatus     `json:"status"`
-	ContingentStatus         string          `json:"contingent-status"`
-	ConfirmationStatus       string          `json:"confirmation-status"`
 	Cancellable              bool            `json:"cancellable"`
 	CancelledAt              time.Time       `json:"cancelled-at"`
 	CancelUserID             string          `json:"cancel-user-id"`
 	CancelUsername           string          `json:"cancel-username"`
-	Editable                 bool            `json:"editable"`
-	Edited                   bool            `json:"edited"`
-	ExtExchangeOrderNumber   string          `json:"ext-exchange-order-number"`
-	ExtClientOrderID         string          `json:"ext-client-order-id"`
-	ExtGlobalOrderNumber     int             `json:"ext-global-order-number"`
-	ReplacingOrderID         string          `json:"replacing-order-id"`
-	ReplacesOrderID          string          `json:"replaces-order-id"`
-	ReceivedAt               time.Time       `json:"received-at"`
-	UpdatedAt                int             `json:"updated-at"`
-	InFlightAt               string          `json:"in-flight-at"`
-	LiveAt                   string          `json:"live-at"`
-	RejectReason             string          `json:"reject-reason"`
-	UserID                   string          `json:"user-id"`
-	Username                 string          `json:"username"`
-	TerminalAt               time.Time       `json:"terminal-at"`
 	ComplexOrderID           int             `json:"complex-order-id"`
 	ComplexOrderTag          string          `json:"complex-order-tag"`
-	PreflightID              string          `json:"preflight-id"`
+	ConfirmationStatus       string          `json:"confirmation-status"`
+	ContingentStatus         string          `json:"contingent-status"`
+	Editable                 bool            `json:"editable"`
+	Edited                   bool            `json:"edited"`
+	ExtClientOrderID         string          `json:"ext-client-order-id"`
+	ExtExchangeOrderNumber   string          `json:"ext-exchange-order-number"`
+	ExtGlobalOrderNumber     int             `json:"ext-global-order-number"`
+	GtcDate                  string          `json:"gtc-date"`
+	ID                       int             `json:"id"`
+	InFlightAt               string          `json:"in-flight-at"`
 	Legs                     []OrderLeg      `json:"legs"`
+	LiveAt                   string          `json:"live-at"`
+	OrderType                OrderType       `json:"order-type"`
+	PreflightID              string          `json:"preflight-id"`
+	Price                    decimal.Decimal `json:"price"`
+	PriceEffect              PriceEffect     `json:"price-effect"`
+	ReceivedAt               time.Time       `json:"received-at"`
+	RejectReason             string          `json:"reject-reason"`
+	ReplacesOrderID          string          `json:"replaces-order-id"`
+	ReplacingOrderID         string          `json:"replacing-order-id"`
 	Rules                    OrderRules      `json:"rules"`
+	Size                     int             `json:"size"`
+	Status                   OrderStatus     `json:"status"`
+	StopTrigger              decimal.Decimal `json:"stop-trigger"`
+	TerminalAt               time.Time       `json:"terminal-at"`
+	TimeInForce              TimeInForce     `json:"time-in-force"`
+	UnderlyingSymbol         string          `json:"underlying-symbol"`
+	UnderlyingInstrumentType InstrumentType  `json:"underlying-instrument-type"`
+	UserID                   string          `json:"user-id"`
+	Username                 string          `json:"username"`
+	UpdatedAt                int             `json:"updated-at"`
+	Value                    decimal.Decimal `json:"value"`
+	ValueEffect              PriceEffect     `json:"value-effect"`
 }
 
 type ComplexOrder struct {
-	ID                                   int             `json:"id"`
-	AccountNumber                        string          `json:"account-number"`
-	Type                                 string          `json:"type"`
-	TerminalAt                           string          `json:"terminal-at"`
-	RatioPriceThreshold                  decimal.Decimal `json:"ratio-price-threshold"`
+	AccountNumber string `json:"account-number"`
+	ID            int    `json:"id"`
+	// Orders with complex-order-tag: '::order'. For example, 'OTO::order' for OTO complex orders.
+	Orders                               []Order         `json:"orders"`
 	RatioPriceComparator                 string          `json:"ratio-price-comparator"`
 	RatioPriceIsThresholdBasedOnNotional bool            `json:"ratio-price-is-threshold-based-on-notional"`
+	RatioPriceThreshold                  decimal.Decimal `json:"ratio-price-threshold"`
 	// RelatedOrders Non-current orders. This includes replaced orders, unfilled orders, and terminal orders.
 	RelatedOrders []RelatedOrder `json:"related-orders"`
-	// Orders with complex-order-tag: '::order'. For example, 'OTO::order' for OTO complex orders.
-	Orders []Order `json:"orders"`
+	TerminalAt    string         `json:"terminal-at"`
 	// TriggerOrder Order with complex-order-tag: '::trigger-order'. For example, 'OTO::trigger-order for OTO complex orders.
-	TriggerOrder Order `json:"trigger-order"`
+	TriggerOrder Order  `json:"trigger-order"`
+	Type         string `json:"type"`
+}
+
+type ComplexOrderECR struct {
+	RatioPriceComparator string          `json:"ratio-price-comparator"`
+	RatioPriceThreshold  decimal.Decimal `json:"ratio-price-threshold"`
 }
 
 type OrderInfo struct {
@@ -184,6 +189,7 @@ type BuyingPowerEffect struct {
 	Effect                               PriceEffect     `json:"effect"`
 }
 
+// PlacedOrderResponse model
 type OrderResponse struct {
 	Order             Order             `json:"order"`
 	ComplexOrder      ComplexOrder      `json:"complex-order"`
@@ -220,19 +226,34 @@ type OrderReplacement struct {
 }
 
 type NewOrder struct {
-	TimeInForce  TimeInForce   `json:"time-in-force"`
-	GtcDate      string        `json:"gtc-date"`
-	OrderType    OrderType     `json:"order-type"`
-	StopTrigger  float32       `json:"stop-trigger,omitempty"`
-	Price        float32       `json:"price,omitempty"`
-	PriceEffect  PriceEffect   `json:"price-effect,omitempty"`
-	Value        float32       `json:"value,omitempty"`
-	ValueEffect  PriceEffect   `json:"value-effect,omitempty"`
-	Source       string        `json:"source,omitempty"`
-	PartitionKey string        `json:"partition-key,omitempty"`
-	PreflightID  string        `json:"preflight-id,omitempty"`
-	Legs         []NewOrderLeg `json:"legs"`
-	Rules        NewOrderRules `json:"rules,omitempty"`
+	AutomatedSource bool          `json:"automated-source"`
+	GtcDate         string        `json:"gtc-date"`
+	Legs            []NewOrderLeg `json:"legs"`
+	OrderType       OrderType     `json:"order-type"`
+	Price           float32       `json:"price,omitempty"`
+	PartitionKey    string        `json:"partition-key,omitempty"`
+	PreflightID     string        `json:"preflight-id,omitempty"`
+	PriceEffect     PriceEffect   `json:"price-effect,omitempty"`
+	Rules           NewOrderRules `json:"rules"`
+	Source          string        `json:"source,omitempty"`
+	StopTrigger     float32       `json:"stop-trigger,omitempty"`
+	TimeInForce     TimeInForce   `json:"time-in-force"`
+	Value           float32       `json:"value,omitempty"`
+	ValueEffect     PriceEffect   `json:"value-effect,omitempty"`
+}
+
+// postAccountsAccountNumberComplexOrders
+// Creates a new Complex Order from supplied params
+type NewComplexOrder struct {
+	Orders                               []NewOrder      `json:"orders"`
+	RatioPriceThreshold                  decimal.Decimal `json:"ratio-price-threshold"`
+	RatioPriceIsThresholdBasedOnNotional bool            `json:"ratio-price-is-threshold-based-on-notional"`
+	Source                               string          `json:"source"`
+	TriggerOrder                         NewOrder        `json:"trigger-order"`
+	// The type of strategy for the complex order i.e. OCO, OTO, OTOCO, or PAIRS
+	Type ComplexOrderType `json:"type"`
+	// How to compare against the ratio price. supports "gte" or "lte"
+	RatioPriceComparator string `json:"ratio-price-comparator"`
 }
 
 type NewOrderRules struct {
@@ -300,4 +321,12 @@ type OrdersQuery struct {
 	StartAt time.Time `layout:"2006-01-02T15:04:05Z" url:"start-at,omitempty"`
 	// DateTime end range for filtering transactions in full date-time
 	EndAt time.Time `layout:"2006-01-02T15:04:05Z" url:"end-at,omitempty"`
+}
+
+// The query for account complex orders.
+type ComplexOrdersQuery struct {
+	// Default value 10
+	PerPage int `url:"per-page,omitempty"`
+	// Default value 0
+	PageOffset int `url:"page-offset,omitempty"`
 }

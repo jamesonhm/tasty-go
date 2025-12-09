@@ -180,6 +180,137 @@ func (c *Client) PatchOrder(accountNumber string, id int, orderECR NewOrderECR) 
 	return ordersRes.Order, resp, nil
 }
 
+// Returns a paginated list of the account's complex orders
+func (c *Client) GetAccountComplexOrders(accountNumber string, query ComplexOrdersQuery) ([]ComplexOrder, Pagination, *http.Response, error) {
+	path := fmt.Sprintf("/accounts/%s/complex-orders", accountNumber)
+
+	type ordersResponse struct {
+		Data struct {
+			ComplexOrders []ComplexOrder `json:"items"`
+		} `json:"data"`
+		Pagination Pagination `json:"pagination"`
+	}
+
+	ordersRes := new(ordersResponse)
+
+	resp, err := c.request(http.MethodGet, path, query, nil, ordersRes)
+	if err != nil {
+		return []ComplexOrder{}, Pagination{}, resp, err
+	}
+
+	return ordersRes.Data.ComplexOrders, ordersRes.Pagination, resp, nil
+}
+
+// Create a complex order and then runs the preflights without placing the order.
+func (c *Client) SubmitComplexOrderDryRun(accountNumber string, order NewComplexOrder) (OrderResponse, *OrderErrorResponse, *http.Response, error) {
+	path := fmt.Sprintf("/accounts/%s/complex-orders/dry-run", accountNumber)
+
+	type ordersResponse struct {
+		OrderResponse OrderResponse       `json:"data"`
+		OrderError    *OrderErrorResponse `json:"error"`
+	}
+
+	ordersRes := new(ordersResponse)
+
+	resp, err := c.request(http.MethodPost, path, nil, order, ordersRes)
+	if err != nil {
+		return OrderResponse{}, nil, resp, err
+	}
+
+	return ordersRes.OrderResponse, ordersRes.OrderError, resp, nil
+}
+
+// Create a complex order for the client
+func (c *Client) SubmitComplexOrder(accountNumber string, order NewComplexOrder) (OrderResponse, *OrderErrorResponse, *http.Response, error) {
+	path := fmt.Sprintf("/accounts/%s/complex-orders", accountNumber)
+
+	type ordersResponse struct {
+		OrderResponse OrderResponse       `json:"data"`
+		OrderError    *OrderErrorResponse `json:"error"`
+	}
+
+	ordersRes := new(ordersResponse)
+
+	resp, err := c.request(http.MethodPost, path, nil, order, ordersRes)
+	if err != nil {
+		return OrderResponse{}, nil, resp, err
+	}
+
+	return ordersRes.OrderResponse, ordersRes.OrderError, resp, nil
+}
+
+// Runs through preflights for cancel-replace and edit without routing.
+func (c *Client) SubmitComplexOrderECRDryRun(accountNumber string, id int, orderECR ComplexOrderECR) (OrderResponse, *http.Response, error) {
+	path := fmt.Sprintf("/accounts/%s/complex-orders/%d/dry-run", accountNumber, id)
+
+	type ordersResponse struct {
+		OrderResponse OrderResponse `json:"data"`
+	}
+
+	ordersRes := new(ordersResponse)
+
+	resp, err := c.request(http.MethodPost, path, nil, orderECR, ordersRes)
+	if err != nil {
+		return OrderResponse{}, resp, err
+	}
+
+	return ordersRes.OrderResponse, resp, nil
+}
+
+// Returns a single complex order based on the id.
+func (c *Client) GetComplexOrder(accountNumber string, id int) (ComplexOrder, *http.Response, error) {
+	path := fmt.Sprintf("/accounts/%s/complex-orders/%d", accountNumber, id)
+
+	type ordersResponse struct {
+		Order ComplexOrder `json:"data"`
+	}
+
+	ordersRes := new(ordersResponse)
+
+	resp, err := c.request(http.MethodGet, path, nil, nil, ordersRes)
+	if err != nil {
+		return ComplexOrder{}, resp, err
+	}
+
+	return ordersRes.Order, resp, nil
+}
+
+// Requests complex order cancellation.
+func (c *Client) CancelComplexOrder(accountNumber string, id int) (ComplexOrder, *http.Response, error) {
+	path := fmt.Sprintf("/accounts/%s/complex-orders/%d", accountNumber, id)
+
+	type ordersResponse struct {
+		Order ComplexOrder `json:"data"`
+	}
+
+	ordersRes := new(ordersResponse)
+
+	resp, err := c.request(http.MethodDelete, path, nil, nil, ordersRes)
+	if err != nil {
+		return ComplexOrder{}, resp, err
+	}
+
+	return ordersRes.Order, resp, nil
+}
+
+// Edit threshold-price of a PAIRS trade
+func (c *Client) PatchComplexOrder(accountNumber string, id int, orderECR ComplexOrderECR) (OrderResponse, *http.Response, error) {
+	path := fmt.Sprintf("/accounts/%s/complex-orders/%d", accountNumber, id)
+
+	type ordersResponse struct {
+		Order OrderResponse `json:"data"`
+	}
+
+	ordersRes := new(ordersResponse)
+
+	resp, err := c.request(http.MethodPatch, path, nil, orderECR, ordersRes)
+	if err != nil {
+		return OrderResponse{}, resp, err
+	}
+
+	return ordersRes.Order, resp, nil
+}
+
 // Returns a list of live orders for the resource.
 // Requires account numbers param to pull orders from.
 func (c *Client) GetCustomerLiveOrders(customerID string, query OrdersQuery) ([]Order, *http.Response, error) {

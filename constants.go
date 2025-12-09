@@ -5,8 +5,8 @@ const (
 	// Production OAuth2 endpoints
 	oauth2ProductionAuthURL  = "https://my.tastytrade.com/auth.html"
 	oauth2ProductionTokenURL = "https://api.tastyworks.com/oauth/token"
-	
-	// Sandbox OAuth2 endpoints  
+
+	// Sandbox OAuth2 endpoints
 	oauth2SandboxAuthURL  = "https://cert-my.staging-tasty.works/auth.html"
 	oauth2SandboxTokenURL = "https://api.cert.tastyworks.com/oauth/token"
 )
@@ -28,6 +28,7 @@ type OptionType string
 type MonthCode string
 type Exchange string
 type SortOrder string
+type ComplexOrderType string
 
 // The normal flow for a filled order would be Received -> Routed -> In Flight -> Live -> Filled.
 // Order status updates come in real-time to websocket clients that have sent the account-subscribe message.
@@ -161,4 +162,9 @@ const (
 	// SortOrder.
 	Asc  SortOrder = "Asc"
 	Desc SortOrder = "Desc"
+	// ComplexOrderType
+	OCO   ComplexOrderType = "OCO"
+	OTO   ComplexOrderType = "OTO"
+	OTOCO ComplexOrderType = "OTOCO"
+	PAIRS ComplexOrderType = "PAIRS"
 )
