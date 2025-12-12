@@ -27,7 +27,7 @@ type Order struct {
 	Legs                     []OrderLeg      `json:"legs"`
 	LiveAt                   string          `json:"live-at"`
 	OrderType                OrderType       `json:"order-type"`
-	PreflightID              string          `json:"preflight-id"`
+	PreflightID              int             `json:"preflight-id"`
 	Price                    decimal.Decimal `json:"price"`
 	PriceEffect              PriceEffect     `json:"price-effect"`
 	ReceivedAt               time.Time       `json:"received-at"`
@@ -226,8 +226,8 @@ type OrderReplacement struct {
 }
 
 type NewOrder struct {
-	AutomatedSource bool          `json:"automated-source"`
-	GtcDate         string        `json:"gtc-date"`
+	AutomatedSource bool          `json:"automated-source,omitempty"`
+	GtcDate         string        `json:"gtc-date,omitempty"`
 	Legs            []NewOrderLeg `json:"legs"`
 	OrderType       OrderType     `json:"order-type"`
 	Price           float32       `json:"price,omitempty"`
