@@ -855,47 +855,97 @@ func TestPatchOrderError(t *testing.T) {
 	require.NotNil(t, httpResp)
 }
 
-func TestSubmitMarketComplexOrderDryRun(t *testing.T) {
+func TestSubmitComplexOrderDryRun(t *testing.T) {
 	setup()
 	defer teardown()
 
 	accountNumber := "5YZ55555"
-	symbol := "AAPL"
+	symbol := "/MNQZ5"
 	quantity := float32(1)
-	action := BTO
+	triggerPrice := float32(25470.0)
+	triggerAction := BTO
+	triggerPE := Debit
+	stopPrice := float32(25400.0)
+	targetAction := STC
+	targetPrice := float32(25540.0)
+	targetPE := Credit
 
 	mux.HandleFunc(fmt.Sprintf("/accounts/%s/complex-orders/dry-run", accountNumber), func(writer http.ResponseWriter, request *http.Request) {
-		fmt.Fprint(writer, orderDryRunResp)
+		fmt.Fprint(writer, complexOrderDryRunResp)
 	})
 
-	order := NewOrder{
-		TimeInForce: Day,
-		OrderType:   Market,
+	trigger := NewOrder{
+		AutomatedSource: true,
+		OrderType:       Limit,
+		Price:           triggerPrice,
+		PriceEffect:     triggerPE,
+		TimeInForce:     Day,
 		Legs: []NewOrderLeg{
 			{
-				InstrumentType: EquityIT,
+				InstrumentType: FutureIT,
 				Symbol:         symbol,
+				Action:         triggerAction,
 				Quantity:       quantity,
-				Action:         action,
 			},
 		},
 	}
 
-	resp, orderErr, httpResp, err := client.SubmitOrderDryRun(accountNumber, order)
+	stop := NewOrder{
+		AutomatedSource: true,
+		OrderType:       Stop,
+		StopTrigger:     stopPrice,
+		TimeInForce:     GTC,
+		Legs: []NewOrderLeg{
+			{
+				InstrumentType: FutureIT,
+				Symbol:         symbol,
+				Action:         targetAction,
+				Quantity:       quantity,
+			},
+		},
+	}
+
+	target := NewOrder{
+		AutomatedSource: true,
+		OrderType:       Limit,
+		Price:           targetPrice,
+		PriceEffect:     targetPE,
+		TimeInForce:     GTC,
+		Legs: []NewOrderLeg{
+			{
+				InstrumentType: FutureIT,
+				Symbol:         symbol,
+				Action:         targetAction,
+				Quantity:       quantity,
+			},
+		},
+	}
+
+	order := NewComplexOrder{
+		Type:         OTOCO,
+		TriggerOrder: trigger,
+		Orders: []NewOrder{
+			stop,
+			target,
+		},
+	}
+
+	resp, orderErr, httpResp, err := client.SubmitComplexOrderDryRun(accountNumber, order)
 	require.Nil(t, err)
 	require.NotNil(t, httpResp)
 	require.Nil(t, orderErr)
 
-	o := resp.Order
+	o := resp.ComplexOrder.TriggerOrder
+	fmt.Printf("resp.complex.trigger: %+v\n", o)
 
 	require.Equal(t, accountNumber, o.AccountNumber)
 	require.Equal(t, Day, o.TimeInForce)
-	require.Equal(t, Market, o.OrderType)
+	require.Equal(t, Limit, o.OrderType)
 	require.Equal(t, 1, o.Size)
-	require.Equal(t, symbol, o.UnderlyingSymbol)
-	require.Equal(t, EquityIT, o.UnderlyingInstrumentType)
+	require.Equal(t, "/MNQ", o.UnderlyingSymbol)
+	require.Equal(t, FutureIT, o.UnderlyingInstrumentType)
 	require.Equal(t, Contingent, o.Status)
-	require.Equal(t, "Pending Condition", o.ContingentStatus)
+	require.Equal(t, "Pending Order", o.ContingentStatus)
 	require.True(t, o.Cancellable)
 	require.True(t, o.Editable)
 	require.False(t, o.Edited)
@@ -903,43 +953,12 @@ func TestSubmitMarketComplexOrderDryRun(t *testing.T) {
 
 	ol := o.Legs[0]
 
-	require.Equal(t, EquityIT, ol.InstrumentType)
+	require.Equal(t, FutureIT, ol.InstrumentType)
 	require.Equal(t, symbol, ol.Symbol)
 	require.Equal(t, quantity, ol.Quantity)
 	require.Equal(t, quantity, ol.RemainingQuantity)
-	require.Equal(t, action, ol.Action)
+	require.Equal(t, Buy, ol.Action)
 	require.Empty(t, ol.Fills)
-
-	require.Empty(t, resp.Warnings)
-
-	bpe := resp.BuyingPowerEffect
-
-	require.Equal(t, decimal.NewFromFloat(183.08), bpe.ChangeInMarginRequirement)
-	require.Equal(t, Debit, bpe.ChangeInMarginRequirementEffect)
-	require.Equal(t, decimal.NewFromFloat(183.081), bpe.ChangeInBuyingPower)
-	require.Equal(t, Debit, bpe.ChangeInBuyingPowerEffect)
-	require.Equal(t, decimal.NewFromFloat(241.62), bpe.CurrentBuyingPower)
-	require.Equal(t, Credit, bpe.CurrentBuyingPowerEffect)
-	require.Equal(t, decimal.NewFromFloat(58.539), bpe.NewBuyingPower)
-	require.Equal(t, Credit, bpe.NewBuyingPowerEffect)
-	require.Equal(t, decimal.NewFromFloat(183.08), bpe.IsolatedOrderMarginRequirement)
-	require.Equal(t, Debit, bpe.IsolatedOrderMarginRequirementEffect)
-	require.False(t, bpe.IsSpread)
-	require.Equal(t, decimal.NewFromFloat(183.081), bpe.Impact)
-	require.Equal(t, Debit, bpe.Effect)
-
-	fee := resp.FeeCalculation
-
-	require.True(t, fee.RegulatoryFees.Equal(decimal.Zero), "regulatory fees")
-	require.Equal(t, None, fee.RegulatoryFeesEffect)
-	require.Equal(t, decimal.NewFromFloat(0.001), fee.ClearingFees)
-	require.Equal(t, Debit, fee.ClearingFeesEffect)
-	require.True(t, fee.Commission.Equal(decimal.Zero))
-	require.Equal(t, None, fee.CommissionEffect)
-	require.True(t, fee.ProprietaryIndexOptionFees.Equal(decimal.Zero))
-	require.Equal(t, None, fee.ProprietaryIndexOptionFeesEffect)
-	require.Equal(t, decimal.NewFromFloat(0.001), fee.TotalFees)
-	require.Equal(t, Debit, fee.TotalFeesEffect)
 }
 
 func TestGetCustomerLiveOrders(t *testing.T) {
@@ -1873,132 +1892,273 @@ const customerLiveOrdersResp = `{
   "context": "/customers/me/orders/live"
 }`
 
-const accountComplexOrdersResp = `{
+const complexOrderDryRunResp = `{
   "data": {
-    "items": [
-	  {
-		"terminal-at": "",
+	  "order": {
+		"account-number": "",
+		"cancellable": false,
+		"cancelled-at": "0001-01-01T00:00:00Z",
+		"cancel-user-id": "",
+		"cancel-username": "",
+		"complex-order-id": 0,
+		"complex-order-tag": "",
+		"confirmation-status": "",
+		"contingent-status": "",
+		"editable": false,
+		"edited": false,
+		"ext-client-order-id": "",
+		"ext-exchange-order-number": "",
+		"ext-global-order-number": 0,
+		"gtc-date": "",
+		"id": 0,
+		"in-flight-at": "",
+		"legs": null,
+		"live-at": "",
+		"order-type": "",
+		"preflight-id": 0,
+		"price": "0",
+		"price-effect": "",
+		"received-at": "0001-01-01T00:00:00Z",
+		"reject-reason": "",
+		"replaces-order-id": "",
+		"replacing-order-id": "",
+		"rules": {
+		  "route-after": "",
+		  "routed-at": "",
+		  "cancel-at": "",
+		  "cancelled-at": "",
+		  "conditions": null
+		},
+		"size": 0,
+		"status": "",
+		"stop-trigger": "0",
+		"terminal-at": "0001-01-01T00:00:00Z",
+		"time-in-force": "",
+		"underlying-symbol": "",
+		"underlying-instrument-type": "",
+		"user-id": "",
+		"username": "",
+		"updated-at": 0,
+		"value": "0",
+		"value-effect": ""
+	  },
+	  "complex-order": {
+		"account-number": "5WY91941",
+		"id": 0,
 		"orders": [
 		  {
-			"id": 68681,
-			"account-number": "5WV48989",
-			"time-in-force": "Day",
-			"order-type": "Limit",
-			"size": 1,
-			"underlying-symbol": "AAPL",
-			"underlying-instrument-type": "Equity",
-			"price": "187.45",
-			"price-effect": "Debit",
-			"value-effect": "Debit",
-			"status": "Contingent",
-			"contingent-status": "Pending Condition",
+			"account-number": "5YZ55555",
 			"cancellable": true,
+			"cancelled-at": "0001-01-01T00:00:00Z",
+			"cancel-user-id": "",
+			"cancel-username": "",
+			"complex-order-id": 3,
+			"complex-order-tag": "OTOCO::oco-1-order",
+			"confirmation-status": "",
+			"contingent-status": "Pending Order",
 			"editable": true,
 			"edited": false,
-			"received-at": "2023-06-14T01:46:44.803+00:00",
-			"updated-at": 1686707204835,
+			"ext-client-order-id": "",
+			"ext-exchange-order-number": "",
+			"ext-global-order-number": 0,
+			"gtc-date": "",
+			"id": 0,
+			"in-flight-at": "",
 			"legs": [
 			  {
-				"instrument-type": "Equity",
-				"symbol": "AAPL",
+				"instrument-type": "Future",
+				"symbol": "/MNQZ5",
 				"quantity": 1,
 				"remaining-quantity": 1,
-				"action": "Buy to Open",
+				"action": "Sell",
 				"fills": []
 			  }
 			],
+			"live-at": "",
+			"order-type": "Stop",
+			"preflight-id": 1,
+			"price": "0",
+			"price-effect": "",
+			"received-at": "0001-01-01T00:00:00Z",
+			"reject-reason": "",
+			"replaces-order-id": "",
+			"replacing-order-id": "",
 			"rules": {
-			  "conditions": [
-				{
-				  "id": 287,
-				  "action": "route",
-				  "symbol": "AAPL",
-				  "instrument-type": "Equity",
-				  "indicator": "last",
-				  "comparator": "lte",
-				  "threshold": "0.01",
-				  "is-threshold-based-on-notional": false,
-				  "price-components": [
-					{
-					  "symbol": "AAPL",
-					  "instrument-type": "Equity",
-					  "quantity": 1,
-					  "quantity-direction": "Long"
-					}
-				  ]
-				}
-			  ]
-			}
+			  "route-after": "",
+			  "routed-at": "",
+			  "cancel-at": "",
+			  "cancelled-at": "",
+			  "conditions": []
+			},
+			"size": 1,
+			"status": "Contingent",
+			"stop-trigger": "25460",
+			"terminal-at": "0001-01-01T00:00:00Z",
+			"time-in-force": "GTC",
+			"underlying-symbol": "/MNQ",
+			"underlying-instrument-type": "Future",
+			"user-id": "",
+			"username": "",
+			"updated-at": 0,
+			"value": "0",
+			"value-effect": ""
 		  },
 		  {
-			"id": 68680,
-			"account-number": "5WV48989",
-			"time-in-force": "Day",
-			"order-type": "Limit",
-			"size": 1,
-			"underlying-symbol": "AAPL",
-			"underlying-instrument-type": "Equity",
-			"price": "185.45",
-			"price-effect": "Debit",
-			"value-effect": "Debit",
-			"status": "Cancelled",
-			"cancellable": false,
-			"cancelled-at": "2023-06-14T01:46:44.799+00:00",
-			"editable": false,
-			"edited": true,
-			"received-at": "2023-06-14T01:38:59.936+00:00",
-			"updated-at": 1686707204813,
-			"terminal-at": "2023-06-14T01:46:44.799+00:00",
+			"account-number": "5YZ55555",
+			"cancellable": true,
+			"cancelled-at": "0001-01-01T00:00:00Z",
+			"cancel-user-id": "",
+			"cancel-username": "",
+			"complex-order-id": 3,
+			"complex-order-tag": "OTOCO::oco-1-order",
+			"confirmation-status": "",
+			"contingent-status": "Pending Order",
+			"editable": true,
+			"edited": false,
+			"ext-client-order-id": "",
+			"ext-exchange-order-number": "",
+			"ext-global-order-number": 0,
+			"gtc-date": "",
+			"id": 0,
+			"in-flight-at": "",
 			"legs": [
 			  {
-				"instrument-type": "Equity",
-				"symbol": "AAPL",
+				"instrument-type": "Future",
+				"symbol": "/MNQZ5",
 				"quantity": 1,
 				"remaining-quantity": 1,
-				"action": "Buy to Open",
+				"action": "Sell",
 				"fills": []
 			  }
 			],
+			"live-at": "",
+			"order-type": "Limit",
+			"preflight-id": 2,
+			"price": "25520",
+			"price-effect": "Credit",
+			"received-at": "0001-01-01T00:00:00Z",
+			"reject-reason": "",
+			"replaces-order-id": "",
+			"replacing-order-id": "",
 			"rules": {
-			  "conditions": [
-				{
-				  "id": 286,
-				  "action": "route",
-				  "symbol": "AAPL",
-				  "instrument-type": "Equity",
-				  "indicator": "last",
-				  "comparator": "lte",
-				  "threshold": "0.01",
-				  "is-threshold-based-on-notional": false,
-				  "price-components": [
-					{
-					  "symbol": "AAPL",
-					  "instrument-type": "Equity",
-					  "quantity": 1,
-					  "quantity-direction": "Long"
-					}
-				  ]
-				}
-			  ]
-			}
+			  "route-after": "",
+			  "routed-at": "",
+			  "cancel-at": "",
+			  "cancelled-at": "",
+			  "conditions": []
+			},
+			"size": 1,
+			"status": "Contingent",
+			"stop-trigger": "0",
+			"terminal-at": "0001-01-01T00:00:00Z",
+			"time-in-force": "GTC",
+			"underlying-symbol": "/MNQ",
+			"underlying-instrument-type": "Future",
+			"user-id": "",
+			"username": "",
+			"updated-at": 0,
+			"value": "0",
+			"value-effect": ""
 		  }
 		],
-		"ratio-price-threshold": 0,
-		"related-orders": [
+		"ratio-price-comparator": "",
+		"ratio-price-is-threshold-based-on-notional": false,
+		"ratio-price-threshold": "0",
+		"related-orders": null,
+		"terminal-at": "",
+		"trigger-order": {
+		  "account-number": "5YZ55555",
+		  "cancellable": true,
+		  "cancelled-at": "0001-01-01T00:00:00Z",
+		  "cancel-user-id": "",
+		  "cancel-username": "",
+		  "complex-order-id": 3,
+		  "complex-order-tag": "OTOCO::trigger-order",
+		  "confirmation-status": "",
+		  "contingent-status": "Pending Order",
+		  "editable": true,
+		  "edited": false,
+		  "ext-client-order-id": "",
+		  "ext-exchange-order-number": "",
+		  "ext-global-order-number": 0,
+		  "gtc-date": "",
+		  "id": 0,
+		  "in-flight-at": "",
+		  "legs": [
 			{
-				"id": "123",
-    ]
-  },
-  "context": "/accounts/5WV48989/orders",
-  "pagination": {
-    "per-page": 2,
-    "page-offset": 0,
-    "item-offset": 0,
-    "total-items": 8,
-    "total-pages": 4,
-    "current-item-count": 2,
-    "previous-link": null,
-    "next-link": null,
-    "paging-link-template": null
-  }
+			  "instrument-type": "Future",
+			  "symbol": "/MNQZ5",
+			  "quantity": 1,
+			  "remaining-quantity": 1,
+			  "action": "Buy",
+			  "fills": []
+			}
+		  ],
+		  "live-at": "",
+		  "order-type": "Limit",
+		  "preflight-id": 0,
+		  "price": "25470",
+		  "price-effect": "Debit",
+		  "received-at": "0001-01-01T00:00:00Z",
+		  "reject-reason": "",
+		  "replaces-order-id": "",
+		  "replacing-order-id": "",
+		  "rules": {
+			"route-after": "",
+			"routed-at": "",
+			"cancel-at": "",
+			"cancelled-at": "",
+			"conditions": []
+		  },
+		  "size": 1,
+		  "status": "Contingent",
+		  "stop-trigger": "0",
+		  "terminal-at": "0001-01-01T00:00:00Z",
+		  "time-in-force": "Day",
+		  "underlying-symbol": "/MNQ",
+		  "underlying-instrument-type": "Future",
+		  "user-id": "",
+		  "username": "",
+		  "updated-at": 0,
+		  "value": "0",
+		  "value-effect": ""
+		},
+		"type": "OTOCO"
+	  },
+	  "warnings": [
+		{
+		  "code": "gtc_cancel_risk",
+		  "message": "GTC orders cannot be cancelled when the market is between sessions.",
+		  "preflight-id": ""
+		}
+	  ],
+	  "errors": null,
+	  "buying-power-effect": {
+		"change-in-margin-requirement": "1",
+		"change-in-margin-requirement-effect": "Debit",
+		"change-in-buying-power": "5.56",
+		"change-in-buying-power-effect": "Debit",
+		"current-buying-power": "1000000",
+		"current-buying-power-effect": "Credit",
+		"new-buying-power": "999995.44",
+		"new-buying-power-effect": "Credit",
+		"isolated-order-margin-requirement": "0",
+		"isolated-order-margin-requirement-effect": "None",
+		"is-spread": false,
+		"impact": "5.56",
+		"effect": "Debit"
+	  },
+	  "fee-calculation": {
+		"regulatory-fees": "0.37",
+		"regulatory-fees-effect": "Debit",
+		"clearing-fees": "0.3",
+		"clearing-fees-effect": "Debit",
+		"commission": "0.85",
+		"commission-effect": "Debit",
+		"proprietary-index-option-fees": "0",
+		"proprietary-index-option-fees-effect": "None",
+		"total-fees": "1.52",
+		"total-fees-effect": "Debit"
+	  }
+	}
 }`
